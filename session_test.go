@@ -1,8 +1,10 @@
 package goreq
 
 import (
-	"testing"
 	"io/ioutil"
+	"testing"
+	"time"
+
 	"github.com/tidwall/gjson"
 )
 
@@ -13,8 +15,9 @@ func TestGetParams(t *testing.T) {
 	headers := &Headers{
 		"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.167 Safari/537.36",
 	}
+	timeout := 10 * time.Nanosecond
 	s := NewSession()
-	res, err := s.Get("http://httpbin.org/get", headers, params)
+	res, err := s.Get("http://httpbin.org/get", headers, params, timeout)
 	if err != nil {
 		t.Error("fail to get a Response", err)
 	}

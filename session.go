@@ -1,13 +1,15 @@
 package goreq
 
 import (
+	"bytes"
+	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
 	"strings"
-	"encoding/json"
-	"bytes"
+	"time"
 )
 
 type Headers map[string]string
@@ -22,40 +24,57 @@ type Files struct {
 }
 
 type Session struct {
-	Client *http.Client
+	Client    *http.Client
+	Transport *http.Transport
 }
 
 //initiate a session
 func NewSession() *Session {
-	s := &Session{}
-	s.Client = &http.Client{}
-	Jar, err := cookiejar.New(nil)
+	jar, err := cookiejar.New(nil)
 	if err != nil {
 		panic(err)
 	}
-	s.Client.Jar = Jar
+	s := &Session{
+		Client:    &http.Client{Jar: jar},
+		Transport: &http.Transport{},
+	}
 	return s
 }
 
 //build a new Request
-func (s *Session) Request(method, reqURL string, args ...interface{}) (*http.Request, error) {
+func (s *Session) Request(method, reqURL string, args ...interface{}) (res *http.Response, err error) {
 
 	var body interface{}
 	var headers Headers
 	var contentType string
-	var err error
-
+	var req *http.Request
+	// 解析参数
 	for _, arg := range args {
 		switch t := arg.(type) {
 		case *Headers:
+			// 请求头
 			headers = *t
-		case Proxy:
-			urlProxy, err := url.Parse(string(t))
-			if err != nil {
-				return nil, err
+		case time.Duration:
+			// 超时
+			timeout := t
+			s.Transport.Dial = func(network, addr string) (net.Conn, error) {
+				conn, err := net.DialTimeout(network, addr, timeout)
+				if err != nil {
+					return nil, err
+				}
+				conn.SetDeadline(time.Now().Add(timeout))
+				return conn, nil
 			}
-			s.Client.Transport = &http.Transport{
-				Proxy: http.ProxyURL(urlProxy),
+		case Proxy:
+			proxyURL := string(t)
+			if proxyURL == "" {
+				s.Transport.Proxy = nil
+			} else {
+				parsedProxyURL, err := url.Parse(proxyURL)
+				if err != nil {
+					return nil, err
+				}
+				s.Transport.Proxy = http.ProxyURL(parsedProxyURL)
 			}
 		case *Data:
 			body = strings.NewReader(url.Values(*t).Encode())
@@ -80,36 +99,31 @@ func (s *Session) Request(method, reqURL string, args ...interface{}) (*http.Req
 			}
 		}
 	}
-
+	// 构造请求
 	if body != nil {
-		req, err := http.NewRequest(method, reqURL, body.(io.Reader))
-		for key, val := range headers {
-			req.Header.Set(key, val)
-		}
-		if contentType != "" {
-			req.Header.Add("Content-Type", contentType)
-		}
-		return req, err
+		req, err = http.NewRequest(method, reqURL, body.(io.Reader))
 	} else {
-		req, err := http.NewRequest(method, reqURL, nil)
-		for key, val := range headers {
-			req.Header.Set(key, val)
-		}
-		if contentType != "" {
-			req.Header.Add("Content-Type", contentType)
-		}
-		return req, err
+		req, err = http.NewRequest(method, reqURL, nil)
 	}
+
+	for key, val := range headers {
+		req.Header.Set(key, val)
+	}
+
+	if contentType != "" {
+		req.Header.Add("Content-Type", contentType)
+	}
+
+	s.Client.Transport = s.Transport
+	return s.Client.Do(req)
 }
 
 //wrap a GET method
 func (s Session) Get(url string, args ...interface{}) (*http.Response, error) {
-	req, _ := s.Request("GET", url, args...)
-	return s.Client.Do(req)
+	return s.Request("GET", url, args...)
 }
 
 //wrap a POST method
 func (s Session) Post(url string, args ...interface{}) (*http.Response, error) {
-	req, _ := s.Request("POST", url, args...)
-	return s.Client.Do(req)
+	return s.Request("POST", url, args...)
 }
