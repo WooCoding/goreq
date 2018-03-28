@@ -2,12 +2,12 @@ package goreq
 
 import "net/http"
 
-func Get(url string, args ...interface{}) (*http.Response, error) {
+func Get(URL string, opt *Option) (*http.Response, error) {
 	s := NewSession()
-	return s.Get(url, args...)
+	return s.Get(URL, opt)
 }
 
-func Post(url string, args ...interface{}) (*http.Response, error) {
+func Post(URL string, opt *Option) (*http.Response, error) {
 	s := NewSession()
-	return s.Post(url, args...)
+	return s.Post(URL, opt)
 }

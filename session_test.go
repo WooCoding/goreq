@@ -3,21 +3,23 @@ package goreq
 import (
 	"io/ioutil"
 	"testing"
-	"time"
 
 	"github.com/tidwall/gjson"
+	"net/url"
+	"time"
 )
 
 func TestGetParams(t *testing.T) {
-	params := &Params{
-		"arg": {"param"},
+
+	opt := &Option{
+		Header:map[string]string{
+			"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.167 Safari/537.36",
+		},
+		Param:url.Values{"arg": {"param"}},
+		Timeout:10 * time.Second,
 	}
-	headers := &Headers{
-		"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.167 Safari/537.36",
-	}
-	timeout := 10 * time.Nanosecond
 	s := NewSession()
-	res, err := s.Get("http://httpbin.org/get", headers, params, timeout)
+	res, err := s.Get("http://httpbin.org/get", opt)
 	if err != nil {
 		t.Error("fail to get a Response", err)
 	}
@@ -30,11 +32,14 @@ func TestGetParams(t *testing.T) {
 }
 
 func TestGetHeaders(t *testing.T) {
-	headers := &Headers{
-		"User-Agent": "goreq",
+
+	opt := &Option{
+		Header:map[string]string{
+			"User-Agent": "goreq",
+		},
 	}
 	s := NewSession()
-	res, err := s.Get("http://httpbin.org/get", headers)
+	res, err := s.Get("http://httpbin.org/get", opt)
 	if err != nil {
 		t.Error("fail to get a Response", err)
 	}
@@ -47,11 +52,13 @@ func TestGetHeaders(t *testing.T) {
 }
 
 func TestPostData(t *testing.T) {
-	data := &Data{
-		"key": {"data"},
+
+	opt := &Option{
+		Data:url.Values{"key": {"data"}},
 	}
+
 	s := NewSession()
-	res, err := s.Post("http://httpbin.org/post", data)
+	res, err := s.Post("http://httpbin.org/post", opt)
 	if err != nil {
 		t.Error("fail to get a Response", err)
 	}
@@ -68,11 +75,16 @@ func TestPostJson(t *testing.T) {
 	//json := &Json{
 	//	"key":[]string{"json", "list"},
 	//}
-	json := &Json{
+	json := map[string]interface{}{
 		"key": "json",
 	}
+
+	opt := &Option{
+		Json:json,
+	}
+
 	s := NewSession()
-	res, err := s.Post("http://httpbin.org/post", json)
+	res, err := s.Post("http://httpbin.org/post", opt)
 	if err != nil {
 		t.Error("fail to get a Response", err)
 	}

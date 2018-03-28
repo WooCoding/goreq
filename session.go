@@ -3,24 +3,28 @@ package goreq
 import (
 	"bytes"
 	"encoding/json"
-	"io"
-	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"reflect"
 	"strings"
 	"time"
+	"io"
 )
 
-type Headers map[string]string
-type Json map[string]interface{}
-type Data url.Values
-type Params url.Values
-type Proxy string
-type Files struct {
+type File struct {
 	name   string
 	path   string
 	params map[string]string
+}
+
+type Option struct {
+	Header  map[string]string
+	Timeout time.Duration
+	Proxy   string
+	Data    url.Values
+	Param   url.Values
+	Json    map[string]interface{}
 }
 
 type Session struct {
@@ -38,35 +42,33 @@ func NewSession() *Session {
 		Client:    &http.Client{Jar: jar},
 		Transport: &http.Transport{},
 	}
+	// disable keep alives by default, see this issue https://github.com/parnurzeal/gorequest/issues/75
+	s.Transport.DisableKeepAlives = true
 	return s
 }
 
 //build a new Request
-func (s *Session) Request(method, reqURL string, args ...interface{}) (res *http.Response, err error) {
+func (s *Session) Request(method, URL string, opt *Option) (*http.Response, error) {
 
-	var body interface{}
-	var headers Headers
-	var contentType string
-	var req *http.Request
+	var (
+		body        interface{}
+		contentType string
+		req         *http.Request
+		res         *http.Response
+		err         error
+	)
+	//清空代理
+	//s.Transport.Proxy = nil
 	// 解析参数
-	for _, arg := range args {
-		switch t := arg.(type) {
-		case *Headers:
-			// 请求头
-			headers = *t
-		case time.Duration:
-			// 超时
-			timeout := t
-			s.Transport.Dial = func(network, addr string) (net.Conn, error) {
-				conn, err := net.DialTimeout(network, addr, timeout)
-				if err != nil {
-					return nil, err
-				}
-				conn.SetDeadline(time.Now().Add(timeout))
-				return conn, nil
-			}
-		case Proxy:
-			proxyURL := string(t)
+	t := reflect.TypeOf(*opt)
+	v := reflect.ValueOf(*opt)
+	for i := 0; i < t.NumField(); i++ {
+		//fmt.Printf("%s -- %v \n", t.Field(i).Name, v.Field(i).Interface())
+		name := t.Field(i).Name
+		val := v.Field(i).Interface()
+		switch name {
+		case "Proxy":
+			proxyURL := val.(string)
 			if proxyURL == "" {
 				s.Transport.Proxy = nil
 			} else {
@@ -76,37 +78,93 @@ func (s *Session) Request(method, reqURL string, args ...interface{}) (res *http
 				}
 				s.Transport.Proxy = http.ProxyURL(parsedProxyURL)
 			}
-		case *Data:
-			body = strings.NewReader(url.Values(*t).Encode())
-			contentType = "application/x-www-form-urlencoded"
-		case *Json:
-			bytesData, err := json.Marshal(*t)
-			if err != nil {
-				return nil, err
+		case "Data":
+			data := val.(url.Values)
+			if len(data) != 0 {
+				body = strings.NewReader(data.Encode())
+				contentType = "application/x-www-form-urlencoded"
 			}
-			body = bytes.NewReader(bytesData)
-			contentType = "application/json;charset=UTF-8"
-		case *Params:
-			var buf bytes.Buffer
-			buf.WriteString(reqURL)
-			buf.WriteByte('?')
-			buf.WriteString(url.Values(*t).Encode())
-			reqURL = buf.String()
-		case *Files:
-			body, contentType, err = UploadFile(t)
-			if err != nil {
-				return nil, err
+		case "Param":
+			param := val.(url.Values)
+			if len(param) != 0 {
+				var buf bytes.Buffer
+				buf.WriteString(URL)
+				buf.WriteByte('?')
+				buf.WriteString(param.Encode())
+				URL = buf.String()
+			}
+		case "Json":
+			jsonData := val.(map[string]interface{})
+			if len(jsonData) != 0 {
+				bytesData, err := json.Marshal(jsonData)
+				if err != nil {
+					return nil, err
+				}
+				body = bytes.NewReader(bytesData)
+				contentType = "application/json;charset=UTF-8"
 			}
 		}
 	}
-	// 构造请求
-	if body != nil {
-		req, err = http.NewRequest(method, reqURL, body.(io.Reader))
-	} else {
-		req, err = http.NewRequest(method, reqURL, nil)
-	}
 
-	for key, val := range headers {
+	//for _, arg := range args {
+	//	switch t := arg.(type) {
+	//	case *Headers:
+	//		// 请求头
+	//		headers = *t
+	//	case time.Duration:
+	//		// 超时
+	//		timeout := t
+	//		s.Transport.Dial = func(network, addr string) (net.Conn, error) {
+	//			conn, err := net.DialTimeout(network, addr, timeout)
+	//			if err != nil {
+	//				return nil, err
+	//			}
+	//			conn.SetDeadline(time.Now().Add(timeout))
+	//			return conn, nil
+	//		}
+	//	case Proxy:
+	//		proxyURL := string(t)
+	//		if proxyURL == "" {
+	//			s.Transport.Proxy = nil
+	//		} else {
+	//			parsedProxyURL, err := url.Parse(proxyURL)
+	//			if err != nil {
+	//				return nil, err
+	//			}
+	//			s.Transport.Proxy = http.ProxyURL(parsedProxyURL)
+	//		}
+	//	case *Data:
+	//		body = strings.NewReader(url.Values(*t).Encode())
+	//		contentType = "application/x-www-form-urlencoded"
+	//	case *Json:
+	//		bytesData, err := json.Marshal(*t)
+	//		if err != nil {
+	//			return nil, err
+	//		}
+	//		body = bytes.NewReader(bytesData)
+	//		contentType = "application/json;charset=UTF-8"
+	//	case *Params:
+	//		var buf bytes.Buffer
+	//		buf.WriteString(reqURL)
+	//		buf.WriteByte('?')
+	//		buf.WriteString(url.Values(*t).Encode())
+	//		reqURL = buf.String()
+	//	case *Files:
+	//		body, contentType, err = UploadFile(t)
+	//		if err != nil {
+	//			return nil, err
+	//		}
+	//	}
+	//}
+	// 构造请求
+
+	if body != nil {
+		req, err = http.NewRequest(method, URL, body.(io.Reader))
+	} else {
+		req, err = http.NewRequest(method, URL, nil)
+	}
+	//设置请求头
+	for key, val := range opt.Header {
 		req.Header.Set(key, val)
 	}
 
@@ -115,15 +173,17 @@ func (s *Session) Request(method, reqURL string, args ...interface{}) (res *http
 	}
 
 	s.Client.Transport = s.Transport
-	return s.Client.Do(req)
+	s.Client.Timeout = opt.Timeout
+	res, err = s.Client.Do(req)
+	return res, err
 }
 
 //wrap a GET method
-func (s Session) Get(url string, args ...interface{}) (*http.Response, error) {
-	return s.Request("GET", url, args...)
+func (s Session) Get(URL string, opt *Option) (*http.Response, error) {
+	return s.Request("GET", URL, opt)
 }
 
 //wrap a POST method
-func (s Session) Post(url string, args ...interface{}) (*http.Response, error) {
-	return s.Request("POST", url, args...)
+func (s Session) Post(URL string, opt *Option) (*http.Response, error) {
+	return s.Request("POST", URL, opt)
 }
