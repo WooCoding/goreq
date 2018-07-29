@@ -1,2 +1,2 @@
 # goreq
-A simplified HTTP request library, incomplete!
+A simplified HTTP request library
