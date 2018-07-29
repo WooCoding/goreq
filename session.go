@@ -106,56 +106,6 @@ func (s *Session) Request(method, URL string, opt *Option) (*http.Response, erro
 		}
 	}
 
-	//for _, arg := range args {
-	//	switch t := arg.(type) {
-	//	case *Headers:
-	//		// 请求头
-	//		headers = *t
-	//	case time.Duration:
-	//		// 超时
-	//		timeout := t
-	//		s.Transport.Dial = func(network, addr string) (net.Conn, error) {
-	//			conn, err := net.DialTimeout(network, addr, timeout)
-	//			if err != nil {
-	//				return nil, err
-	//			}
-	//			conn.SetDeadline(time.Now().Add(timeout))
-	//			return conn, nil
-	//		}
-	//	case Proxy:
-	//		proxyURL := string(t)
-	//		if proxyURL == "" {
-	//			s.Transport.Proxy = nil
-	//		} else {
-	//			parsedProxyURL, err := url.Parse(proxyURL)
-	//			if err != nil {
-	//				return nil, err
-	//			}
-	//			s.Transport.Proxy = http.ProxyURL(parsedProxyURL)
-	//		}
-	//	case *Data:
-	//		body = strings.NewReader(url.Values(*t).Encode())
-	//		contentType = "application/x-www-form-urlencoded"
-	//	case *Json:
-	//		bytesData, err := json.Marshal(*t)
-	//		if err != nil {
-	//			return nil, err
-	//		}
-	//		body = bytes.NewReader(bytesData)
-	//		contentType = "application/json;charset=UTF-8"
-	//	case *Params:
-	//		var buf bytes.Buffer
-	//		buf.WriteString(reqURL)
-	//		buf.WriteByte('?')
-	//		buf.WriteString(url.Values(*t).Encode())
-	//		reqURL = buf.String()
-	//	case *Files:
-	//		body, contentType, err = UploadFile(t)
-	//		if err != nil {
-	//			return nil, err
-	//		}
-	//	}
-	//}
 	// 构造请求
 
 	if body != nil {
